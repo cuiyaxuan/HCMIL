@@ -1,0 +1,25 @@
+# Python and environments
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+logs/
+*.log
+slurm-*.out
+
+# Local data, caches, and analysis results
+data/*
+!data/README.md
+resources/*.gmt
+artifacts/*
+!artifacts/.gitkeep
+*.h5ad
+*.h5
+*.hdf5
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.parquet
+*.csv.gz
+.DS_Store

@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the associated manuscript and this repository."
+title: "HCMIL astrocyte Braak analysis"
+authors:
+  - family-names: Cui
+    given-names: Yaxuan
+  - family-names: Yan
+    given-names: Jingwen
+type: software
+license: MIT
+version: 0.1.0
+abstract: >-
+  Research code for hierarchical cell-scale multiple-instance learning,
+  out-of-fold astrocyte gene attribution, and a locked gene discovery panel.

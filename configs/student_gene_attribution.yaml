@@ -1,0 +1,260 @@
+seed: 20261006
+
+task:
+  name: ast_student_gene_discovery_from_raw_h5ad
+  class_names: [Braak_0_2, Braak_3_4, Braak_5_6]
+  class_ranges: [[0, 2], [3, 4], [5, 6]]
+  raw_labeled_class_counts: [111, 200, 112]
+  eligible_class_counts: [111, 198, 112]
+
+data:
+  h5ad_path: data/ROSMAP_enriched_metadata.h5ad
+  donor_key: projid
+  cell_type_key: major_cell_type
+  braak_key: clinical_braaksc
+  counts_layer: null
+  batch_key: null
+  development_fraction: 0.80
+  minimum_cells_per_type: 50
+  expected_eligible_donors: 421
+  expected_development_donors: 336
+  expected_test_donors: 85
+  sampled_cells_per_donor_type: 128
+  scvi_train_cells_per_donor_type: 200
+  query_batch_size: 2048
+  metadata_cache: artifacts/standalone_metadata
+  linear_cache: artifacts/standalone_linear_cache
+  pathway_cache: artifacts/standalone_pathway_cache
+  scvi_cache: artifacts/standalone_scvi32_cache
+
+clinical:
+  biological_numeric: [clinical_age_death, clinical_educ]
+  biological_categorical: [clinical_msex, clinical_apoe_genotype]
+  technical_numeric: [clinical_pmi, rna_RIN]
+  technical_categorical: [clinical_study, rna_Batch]
+  ridge_alpha: 10.0
+
+pathways:
+  files:
+    - resources/hallmark.v2026.1.Hs.symbols.gmt
+    - resources/reactome.v2026.1.Hs.symbols.gmt
+  minimum_genes: 5
+  maximum_genes: 500
+
+teacher:
+  gene_model:
+    n_hvg: 2000
+    hvg_flavor: seurat
+    pca_components: 50
+    pls_components: 2
+    supervised_screen_counts: [200, 500, 1000]
+  pathway_model:
+    pathway_hidden: 16
+    token_dim: 8
+    type_embedding_dim: 4
+    dropout: 0.30
+    reliability_cells: 20
+  training:
+    outer_folds: 5
+    inner_folds: 3
+    seeds: [11, 29, 47, 71, 97, 113, 137, 163, 191, 223]
+    pathway_validation_fraction: 0.20
+    pathway_batch_size: 64
+    pathway_max_epochs: 120
+    pathway_patience: 15
+    pathway_minimum_improvement: 0.001
+    pathway_learning_rate: 0.0005
+    pathway_weight_decay: 0.01
+    pathway_gradient_clip: 5.0
+    pathway_huber_beta: 1.0
+  stacking:
+    nonnegative_ridge_alpha: 1.0
+  classification:
+    logistic_c: 1.0
+    class_weight: balanced
+  evaluation:
+    permutation_repeats: 10000
+    bootstrap_repeats: 10000
+  output_dir: artifacts/teacher_nestedcv
+
+scvi:
+  n_hvg: 3000
+  n_latent: 32
+  n_hidden: 128
+  n_layers: 2
+  dropout_rate: 0.10
+  gene_likelihood: nb
+  dispersion: gene
+  max_epochs: 50
+  batch_size: 1024
+  early_stopping: true
+  early_stopping_patience: 8
+  accelerator: gpu
+  devices: 1
+
+student:
+  n_classes: 3
+  distillation_temperature: 2.0
+  summary_order: [mean, std, q25, median, q75]
+  token_hidden: 64
+  token_dim: 32
+  donor_dim: 16
+  type_embedding_dim: 6
+  dropout: 0.25
+  reconstruction_weight: 0.30
+  teacher_weight: 0.25
+  student_braak_weight: 0.15
+  cell_only_braak_weight: 0.15
+  weight_decay: 0.005
+  learning_rate: 0.0005
+  batch_size: 32
+  max_epochs: 160
+  patience: 20
+  validation_fraction: 0.15
+  minimum_improvement: 0.0005
+  gradient_clip: 5.0
+  huber_beta: 1.0
+  outer_folds: 5
+  seeds: [101, 211, 307, 401, 503, 607, 701, 809, 907, 1009]
+  bootstrap_repeats: 5000
+  permutation_repeats: 5000
+  output_dir: artifacts/development_oof
+
+final_model:
+  mode: sampled
+  seeds: [101, 211, 307, 401, 503, 607, 701, 809, 907, 1009]
+  output_dir: artifacts/final_models
+  evaluation_dir: artifacts/sealed_test_evaluation
+
+cell_type_analysis:
+  permutation_repeats: 200
+  output_dir: artifacts/cell_type_contributions
+
+pseudobulk:
+  minimum_donors_expressed: 34
+  minimum_total_counts: 100
+  covariates_numeric: [clinical_age_death, clinical_educ, clinical_pmi, rna_RIN]
+  covariates_categorical: [clinical_msex, clinical_apoe_genotype, clinical_study, rna_Batch]
+  output_dir: artifacts/pseudobulk_braak
+  top_features_per_cell_type: 50
+
+report:
+  output_dir: artifacts/followup_report
+
+celltype_followup:
+  oof_contribution:
+    mode: sampled
+    outer_folds: 5
+    seeds: [101, 307, 503, 701, 907]
+    permutation_repeats: 50
+    bootstrap_repeats: 2000
+    interaction_pairs:
+      - [Ast, OPC]
+      - [Ast, Mic]
+      - [Ast, Oli]
+      - [Exc, Inh]
+      - [End, Per]
+      - [End, SMC]
+    output_dir: artifacts/celltype_oof_followup
+  reduced_models:
+    mode: sampled
+    outer_folds: 5
+    oof_seeds: [101, 307, 503, 701, 907]
+    final_seeds: [101, 211, 307, 401, 503, 607, 701, 809, 907, 1009]
+    selection_metric: macro_auroc_ovr
+    selection_tolerance: 0.01
+    bootstrap_repeats: 5000
+    candidates:
+      ast: [Ast]
+      ast_opc: [Ast, OPC]
+      ast_opc_mic: [Ast, OPC, Mic]
+      glia: [Ast, Mic, OPC, Oli]
+      full: [ALL]
+    output_dir: artifacts/reduced_celltype_models
+  substates:
+    cell_types:
+      Ast: 6
+      OPC: 5
+    kmeans_training_cells_per_type: 100000
+    kmeans_batch_size: 4096
+    minimum_donors_per_substate: 34
+    top_features_per_substate: 50
+    output_dir: artifacts/celltype_substates
+  integration:
+    priority_cell_types: [Ast, OPC, Mic, Oli]
+    adjust_for_braak: true
+    top_pathways_per_cell_type: 50
+    output_dir: artifacts/celltype_biology_integration
+  report:
+    output_dir: artifacts/celltype_followup_report
+
+retraining_panel:
+  mode: sampled
+  outer_folds: 5
+  seeds: [101, 211, 307, 401, 503, 607, 701, 809, 907, 1009]
+  final_seeds: [101, 211, 307, 401, 503, 607, 701, 809, 907, 1009]
+  bootstrap_repeats: 5000
+  output_dir: artifacts/mic_oli_ast_retraining
+  report_dir: artifacts/mic_oli_ast_retraining_report
+  candidates:
+    full:
+      label: Full 12 cell types
+      keep: [ALL]
+    drop_mic:
+      label: Drop Mic
+      drop: [Mic]
+    drop_oli:
+      label: Drop Oli
+      drop: [Oli]
+    drop_ast:
+      label: Drop Ast
+      drop: [Ast]
+    drop_mic_oli_ast:
+      label: Drop Mic Oli Ast
+      drop: [Mic, Oli, Ast]
+    only_mic:
+      label: Only Mic
+      keep: [Mic]
+    only_oli:
+      label: Only Oli
+      keep: [Oli]
+    only_ast:
+      label: Only Ast
+      keep: [Ast]
+    only_mic_oli_ast:
+      label: Only Mic Oli Ast
+      keep: [Mic, Oli, Ast]
+
+# Exact model-specific attribution.  Each gene is set to zero in all sampled
+# Ast cells from an outer-fold held donor, re-encoded by the frozen scVI model,
+# and passed through that donor's OOF Student checkpoint.
+attribution:
+  cell_type: Ast
+  student_seeds: [101, 307, 503, 701, 907]
+  outer_folds: 5
+  genes_per_task: 100
+  maximum_baseline_state_difference: 0.005
+  gene_symbol_key: gene_names
+  domains: [clinical_study, rna_Batch]
+  minimum_domain_donors: 10
+  minimum_expressed_donors: 34
+  minimum_model_direction_consistency: 0.70
+  top_genes_per_direction: 50
+  audit_genes: [CSRP1, MRAS, ITGB8, KCNJ16, ADAM33, NPNT, ADPGK-AS1, MOXD1, FZD4, SLC25A12, GRM3, CHI3L1]
+  model_dir: artifacts/ast_student_oof_models
+  attribution_dir: artifacts/student_gene_knockout_chunks
+  aggregate_dir: artifacts/student_gene_attribution
+  report_dir: artifacts/report
+
+# Standalone consensus selection.  These inputs are all generated above in
+# this same project; no artifact from another downstream project is read.
+gene_discovery:
+  output_dir: artifacts/standalone_gene_discovery
+  adjustment_numeric: [clinical_age_death, clinical_educ, clinical_pmi, rna_RIN]
+  adjustment_categorical: [clinical_msex, clinical_apoe_genotype, clinical_study, rna_Batch]
+  minimum_student_model_consistency: 0.70
+  minimum_cell_only_consistency: 0.70
+  minimum_domain_consistency: 0.60
+  minimum_expression_prevalence: 0.20
+  exploratory_fdr_threshold: 0.20
+  panel_size: 20
